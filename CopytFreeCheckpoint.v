@@ -100,12 +100,7 @@ reg Dfa_RsValid, Dfa_RtValid, Dfa_RdValid;
 
 integer i, j;
 
-assign Cfc_Full = full;
-assign full = ((Head_Pointer+1) == Tail_Pointer) ? 1'b1 : 1'b0;
-assign empty = (Head_Pointer == Tail_Pointer) ? 1'b1 : 1'b0;
 
-assign Cfc_FrlHeadPtr = Frl_HeadPtrArray[Next_Head_Pointer];
-assign Cfc_RobTag = Checkpoint_TagArray[Next_Head_Pointer];
 
 // behavior
 always @ (*) begin
@@ -130,25 +125,12 @@ always @ (*) begin
     Checkpoint_MatchArray[7] = (Checkpoint_TagArray[7] == Cdb_RobTag) & (Cfc_ValidArray[7] == 1'b1);
 end
 
-// combinational logic to determine new head pointer during branch misprediction
-always @ (*) begin : cdbflush_logic
-    Next_Head_Pointer = Head_Pointer;
-    if (Cdb_Flush) begin
-        case (Checkpoint_MatchArray)
-            8'b0000_0001: Next_Head_Pointer = 3'b000;
-            8'b0000_0010: Next_Head_Pointer = 3'b001;
-            8'b0000_0100: Next_Head_Pointer = 3'b010;
-            8'b0000_1000: Next_Head_Pointer = 3'b011;
-            8'b0001_0000: Next_Head_Pointer = 3'b100;
-            8'b0010_0000: Next_Head_Pointer = 3'b101;
-            8'b0100_0000: Next_Head_Pointer = 3'b110;
-            8'b1000_0000: Next_Head_Pointer = 3'b111;
-            default: Next_Head_Pointer = 3'bxxx;
-        endcase
-    end
-end
+assign Cfc_Full = full;
+assign full = ((Head_Pointer+1) == Tail_Pointer);
+assign empty = (Head_Pointer == Tail_Pointer);
 
-
+assign Cfc_FrlHeadPtr = Frl_HeadPtrArray[Next_Head_Pointer];
+assign Cfc_RobTag = Checkpoint_TagArray[Next_Head_Pointer];
 
 
 // CFC update logic
@@ -219,6 +201,25 @@ always @ (posedge clk or negedge resetb) begin: cfcupdate
     end
 end
 
+// combinational logic to determine new head pointer during branch misprediction
+always @ (*) begin : cdbflush_logic
+    // Next_Head_Pointer = Head_Pointer;
+    if (Cdb_Flush) begin
+        case (Checkpoint_MatchArray)
+            8'b0000_0001: Next_Head_Pointer = 3'b000;
+            8'b0000_0010: Next_Head_Pointer = 3'b001;
+            8'b0000_0100: Next_Head_Pointer = 3'b010;
+            8'b0000_1000: Next_Head_Pointer = 3'b011;
+            8'b0001_0000: Next_Head_Pointer = 3'b100;
+            8'b0010_0000: Next_Head_Pointer = 3'b101;
+            8'b0100_0000: Next_Head_Pointer = 3'b110;
+            8'b1000_0000: Next_Head_Pointer = 3'b111;
+            default: Next_Head_Pointer = Head_Pointer;
+        endcase
+    end
+end
+
+
 // -------------------------- Rs Searching
 
 reg [2:0] rs_pointer1;
@@ -230,9 +231,9 @@ reg [5:0] Cfc_RsList_temp;
 reg [5:0] Committed_RsList_temp;
 
 always @ (*) begin
-        for (i = 7; i >= 0; i = i - 1) begin
+        for (i = 7; i >= 0; i = i - 1) begin: rs_search1
             if (i <= Head_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRsAddr]) begin: rs_search1
+                if (Dfa_List[i][Dis_CfcRsAddr]) begin
                     rs_pointer1 = i;
                     found_rs1 = 1;
                     disable rs_search1;
@@ -241,9 +242,9 @@ always @ (*) begin
             end
         end
 
-        for (i = 7; i >= 0; i = i - 1) begin
+        for (i = 7; i >= 0; i = i - 1) begin : rs_search2
             if (i >= Tail_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRsAddr]) begin: rs_search2
+                if (Dfa_List[i][Dis_CfcRsAddr]) begin
                     rs_pointer2 = i;
                     found_rs2 = 1;
                     disable rs_search2;
@@ -266,33 +267,7 @@ always @ (posedge clk or negedge resetb) begin
     end
 
     else begin
-/*        
-        for (i = 7; i >= 0; i = i - 1) begin
-            if (i <= Head_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRsAddr]) begin: rs_search1
-                    rs_pointer1 = i;
-                    found_rs1 = 1;
-                    disable rs_search1;
-                end
-                else found_rs1 = 0;
-            end
-        end
 
-        for (i = 7; i >= 0; i = i - 1) begin
-            if (i >= Tail_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRsAddr]) begin: rs_search2
-                    rs_pointer2 = i;
-                    found_rs2 = 1;
-                    disable rs_search2;
-                end
-                else found_rs2 = 0;
-            end
-        end
-
-        if (found_rs1)          BRAM_Rspointer = rs_pointer1;
-        else if (found_rs2)     BRAM_Rspointer = rs_pointer2;
-        else                    BRAM_Rspointer = 0;
-*/
         if (found_rs1 || found_rs2) Dfa_RsValid <= 1;
         else                        Dfa_RsValid <= 0;
 
@@ -323,9 +298,9 @@ reg [5:0] Cfc_RtList_temp;
 reg [5:0] Committed_RtList_temp;
 
 always @ (*) begin
-        for (i = 7; i >= 0; i = i - 1) begin
+        for (i = 7; i >= 0; i = i - 1) begin: rt_search1
             if (i <= Head_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRtAddr]) begin: rt_search1
+                if (Dfa_List[i][Dis_CfcRtAddr]) begin
                     rt_pointer1 = i;
                     found_rt1 = 1;
                     disable rt_search1;
@@ -334,9 +309,9 @@ always @ (*) begin
             end
         end
 
-        for (i = 7; i >= 0; i = i - 1) begin
+        for (i = 7; i >= 0; i = i - 1) begin: rt_search2
             if (i >= Tail_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRtAddr]) begin: rt_search2
+                if (Dfa_List[i][Dis_CfcRtAddr]) begin
                     rt_pointer2 = i;
                     found_rt2 = 1;
                     disable rt_search2;
@@ -359,33 +334,7 @@ always @ (posedge clk or negedge resetb) begin
     end
 
     else begin
-/*        
-        for (i = 7; i >= 0; i = i - 1) begin
-            if (i <= Head_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRsAddr]) begin: rs_search1
-                    rs_pointer1 = i;
-                    found_rs1 = 1;
-                    disable rs_search1;
-                end
-                else found_rs1 = 0;
-            end
-        end
 
-        for (i = 7; i >= 0; i = i - 1) begin
-            if (i >= Tail_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRsAddr]) begin: rs_search2
-                    rs_pointer2 = i;
-                    found_rs2 = 1;
-                    disable rs_search2;
-                end
-                else found_rs2 = 0;
-            end
-        end
-
-        if (found_rs1)          BRAM_Rspointer = rs_pointer1;
-        else if (found_rs2)     BRAM_Rspointer = rs_pointer2;
-        else                    BRAM_Rspointer = 0;
-*/
         if (found_rt1 || found_rt2) Dfa_RtValid <= 1;
         else                        Dfa_RtValid <= 0;
 
@@ -416,9 +365,9 @@ reg [5:0] Cfc_RdList_temp;
 reg [5:0] Committed_RdList_temp;
 
 always @ (*) begin
-        for (i = 7; i >= 0; i = i - 1) begin
+        for (i = 7; i >= 0; i = i - 1) begin: rd_search1
             if (i <= Head_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRdAddr]) begin: rd_search1
+                if (Dfa_List[i][Dis_CfcRdAddr]) begin
                     rd_pointer1 = i;
                     found_rd1 = 1;
                     disable rd_search1;
@@ -427,9 +376,9 @@ always @ (*) begin
             end
         end
 
-        for (i = 7; i >= 0; i = i - 1) begin
+        for (i = 7; i >= 0; i = i - 1) begin: rd_search2
             if (i >= Tail_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRdAddr]) begin: rd_search2
+                if (Dfa_List[i][Dis_CfcRdAddr]) begin
                     rd_pointer2 = i;
                     found_rd2 = 1;
                     disable rd_search2;
@@ -452,33 +401,7 @@ always @ (posedge clk or negedge resetb) begin
     end
 
     else begin
-/*        
-        for (i = 7; i >= 0; i = i - 1) begin
-            if (i <= Head_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRsAddr]) begin: rs_search1
-                    rs_pointer1 = i;
-                    found_rs1 = 1;
-                    disable rs_search1;
-                end
-                else found_rs1 = 0;
-            end
-        end
 
-        for (i = 7; i >= 0; i = i - 1) begin
-            if (i >= Tail_Pointer) begin
-                if (Dfa_List[i][Dis_CfcRsAddr]) begin: rs_search2
-                    rs_pointer2 = i;
-                    found_rs2 = 1;
-                    disable rs_search2;
-                end
-                else found_rs2 = 0;
-            end
-        end
-
-        if (found_rs1)          BRAM_Rspointer = rs_pointer1;
-        else if (found_rs2)     BRAM_Rspointer = rs_pointer2;
-        else                    BRAM_Rspointer = 0;
-*/
         if (found_rd1 || found_rd2) Dfa_RdValid <= 1;
         else                        Dfa_RdValid <= 0;
 
